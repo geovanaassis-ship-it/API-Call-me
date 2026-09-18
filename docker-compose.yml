@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ri_agenda
+      POSTGRES_PASSWORD: ri_agenda
+      POSTGRES_DB: ri_agenda
+    volumes:
+      - ri_agenda_db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ri_agenda"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql://ri_agenda:ri_agenda@db:5432/ri_agenda?schema=public"
+    ports:
+      - "3000:3000"
+
+volumes:
+  ri_agenda_db_data:

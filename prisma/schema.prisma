@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Único analista de R.I. hoje, mas modelado por usuário para permitir
+// adicionar mais pessoas do time no futuro sem migração estrutural.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  timezone     String   @default("America/Sao_Paulo")
+  companyName  String   @default("More Invest - Relações com Investidores")
+
+  // Regras gerais de agendamento
+  bufferBeforeMinutes  Int @default(0)
+  bufferAfterMinutes   Int @default(10)
+  minimumNoticeMinutes Int @default(120)
+  bookingWindowDays    Int @default(45)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventTypes    EventType[]
+  availability  WeeklyAvailability[]
+  dateOverrides DateOverride[]
+}
+
+enum LocationType {
+  JITSI
+  GOOGLE_MEET
+  ZOOM
+  TEAMS
+  PHONE
+  IN_PERSON
+  CUSTOM
+}
+
+model EventType {
+  id              String       @id @default(cuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  slug            String       @unique
+  description     String?
+  durationMinutes Int          @default(30)
+  color           String       @default("#3a5ce6")
+  active          Boolean      @default(true)
+  locationType    LocationType @default(JITSI)
+  locationValue   String?
+  position        Int          @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@index([userId])
+}
+
+model WeeklyAvailability {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dayOfWeek Int // 0 = domingo ... 6 = sábado
+  startTime String // "09:00"
+  endTime   String // "17:00"
+
+  @@index([userId])
+}
+
+model DateOverride {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime // apenas a data (00:00) no timezone do usuário, guardada em UTC
+  isAvailable Boolean  @default(false)
+  startTime   String?
+  endTime     String?
+
+  @@unique([userId, date])
+  @@index([userId])
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  uid             String        @unique @default(cuid())
+  eventTypeId     String
+  eventType       EventType     @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  startTime       DateTime
+  endTime         DateTime
+  attendeeName    String
+  attendeeEmail   String
+  attendeePhone   String?
+  attendeeCompany String?
+  notes           String?
+  status          BookingStatus @default(CONFIRMED)
+  videoLink       String?
+  cancellationReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventTypeId])
+  @@index([startTime])
+}
