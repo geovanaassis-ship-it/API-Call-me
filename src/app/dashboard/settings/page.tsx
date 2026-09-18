@@ -18,6 +18,11 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
   useEffect(() => {
     fetch("/api/dashboard/settings")
       .then((res) => res.json())
@@ -46,6 +51,38 @@ export default function SettingsPage() {
       if (res.ok) setSavedMessage("Configurações salvas.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordMessage(null);
+    setPasswordError(null);
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("A nova senha e a confirmação não coincidem.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const res = await fetch("/api/dashboard/settings/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPasswordError(data.error ?? "Não foi possível trocar a senha.");
+        return;
+      }
+      setPasswordMessage("Senha alterada com sucesso.");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -136,6 +173,52 @@ export default function SettingsPage() {
             {saving ? "Salvando..." : "Salvar configurações"}
           </button>
           {savedMessage && <span className="text-sm text-green-600">{savedMessage}</span>}
+        </div>
+      </form>
+
+      <h2 className="mb-4 mt-8 text-lg font-semibold">Trocar senha</h2>
+      <form onSubmit={handleChangePassword} className="card max-w-xl space-y-4 p-5">
+        <div>
+          <label className="label">Senha atual</label>
+          <input
+            type="password"
+            required
+            className="input"
+            value={passwordForm.currentPassword}
+            onChange={(e) => setPasswordForm((f) => ({ ...f, currentPassword: e.target.value }))}
+          />
+        </div>
+        <div>
+          <label className="label">Nova senha</label>
+          <input
+            type="password"
+            required
+            minLength={8}
+            className="input"
+            value={passwordForm.newPassword}
+            onChange={(e) => setPasswordForm((f) => ({ ...f, newPassword: e.target.value }))}
+          />
+          <p className="mt-1 text-xs text-slate-400">Mínimo de 8 caracteres.</p>
+        </div>
+        <div>
+          <label className="label">Confirmar nova senha</label>
+          <input
+            type="password"
+            required
+            minLength={8}
+            className="input"
+            value={passwordForm.confirmPassword}
+            onChange={(e) => setPasswordForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+          />
+        </div>
+
+        {passwordError && <p className="text-sm text-red-600">{passwordError}</p>}
+
+        <div className="flex items-center gap-3">
+          <button type="submit" disabled={passwordSaving} className="btn-primary">
+            {passwordSaving ? "Salvando..." : "Trocar senha"}
+          </button>
+          {passwordMessage && <span className="text-sm text-green-600">{passwordMessage}</span>}
         </div>
       </form>
     </div>
