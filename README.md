@@ -85,6 +85,22 @@ SMTP_FROM="Relações com Investidores <ri@moreinvest.com.br>"
 
 Funciona com Gmail (usando uma [senha de app](https://support.google.com/accounts/answer/185833)), Outlook/Office 365, SendGrid, Amazon SES, ou qualquer provedor SMTP.
 
+## Segurança e privacidade
+
+O sistema lida com dados pessoais de investidores (nome, e-mail, telefone), então algumas proteções já vêm implementadas:
+
+- **Bloqueio de conta após tentativas de login incorretas**: depois de 5 tentativas erradas seguidas, a conta fica bloqueada por 15 minutos. Há também um limite de tentativas por endereço IP.
+- **Limite de agendamentos por IP e por e-mail**: a página pública de agendamento aceita no máximo 8 tentativas de agendamento por IP a cada 15 minutos, e 5 por e-mail de convidado a cada hora — evita que alguém encha a agenda de propósito.
+- **Aviso de LGPD** na página de agendamento, informando ao convidado quais dados são coletados e para qual finalidade.
+- Senhas armazenadas com hash bcrypt (nunca em texto puro); áreas administrativas protegidas por login; links de cancelamento usam identificadores longos e imprevisíveis.
+
+Pontos que dependem de você, não de código:
+
+- **Não compartilhe o login das suas contas Neon e Vercel.** Quem tiver acesso a elas consegue ver a connection string do banco (e, portanto, os dados dos agendamentos) e as variáveis de ambiente (incluindo `NEXTAUTH_SECRET`). Ative autenticação em duas etapas (2FA) nessas contas se possível.
+- Se em algum momento desconfiar que o `NEXTAUTH_SECRET` ou a senha do banco vazaram, gere valores novos e atualize as variáveis de ambiente na Vercel.
+- Use uma senha forte e exclusiva para o login do painel (`/login`), e troque-a periodicamente em **Configurações → Trocar senha**.
+- Este é um sistema para uso interno de baixo volume — não foi projetado nem testado para resistir a ataques direcionados e sofisticados. Para um volume alto de tráfego público ou dados mais sensíveis, vale considerar uma revisão de segurança mais aprofundada antes de divulgar o link amplamente.
+
 ## Desenvolvimento local
 
 ```bash

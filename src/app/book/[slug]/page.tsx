@@ -262,6 +262,14 @@ export default function BookingPage() {
               />
             </div>
 
+            <p className="rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-500">
+              Os dados informados acima (nome, e-mail{form.phone ? ", telefone" : ""}
+              {form.company ? ", empresa" : ""}) serão usados exclusivamente por{" "}
+              <strong>{eventType.user.companyName}</strong> para agendar, confirmar e realizar esta call, em linha
+              com a Lei Geral de Proteção de Dados (LGPD). Não compartilhamos essas informações com terceiros. Ao
+              confirmar, você concorda com esse uso.
+            </p>
+
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <button type="submit" disabled={submitting} className="btn-primary w-full">

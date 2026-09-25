@@ -6,8 +6,23 @@ import { createBookingSchema } from "@/lib/validation";
 import { computeSlotsForDay } from "@/lib/availability";
 import { resolveVideoLink } from "@/lib/video";
 import { sendBookingEmails } from "@/lib/email";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+
+const IP_WINDOW_MS = 15 * 60 * 1000;
+const IP_MAX_BOOKINGS = 8; // tentativas de agendamento por IP a cada 15 minutos
+const EMAIL_WINDOW_MS = 60 * 60 * 1000;
+const EMAIL_MAX_BOOKINGS = 5; // tentativas por e-mail de convidado por hora
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req.headers);
+  const ipCheck = await checkRateLimit(`booking:ip:${ip}`, { windowMs: IP_WINDOW_MS, max: IP_MAX_BOOKINGS });
+  if (!ipCheck.allowed) {
+    return NextResponse.json(
+      { error: "Muitas tentativas de agendamento a partir deste endereço. Aguarde alguns minutos e tente novamente." },
+      { status: 429 },
+    );
+  }
+
   const body = await req.json().catch(() => null);
   const parsed = createBookingSchema.safeParse(body);
 
@@ -17,6 +32,17 @@ export async function POST(req: Request) {
 
   const { eventTypeSlug, startTime, attendeeName, attendeeEmail, attendeePhone, attendeeCompany, notes } =
     parsed.data;
+
+  const emailCheck = await checkRateLimit(`booking:email:${attendeeEmail.toLowerCase()}`, {
+    windowMs: EMAIL_WINDOW_MS,
+    max: EMAIL_MAX_BOOKINGS,
+  });
+  if (!emailCheck.allowed) {
+    return NextResponse.json(
+      { error: "Muitas tentativas de agendamento com este e-mail. Aguarde um pouco e tente novamente." },
+      { status: 429 },
+    );
+  }
 
   const eventType = await prisma.eventType.findUnique({
     where: { slug: eventTypeSlug },
