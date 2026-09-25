@@ -85,6 +85,55 @@ SMTP_FROM="Relações com Investidores <ri@moreinvest.com.br>"
 
 Funciona com Gmail (usando uma [senha de app](https://support.google.com/accounts/answer/185833)), Outlook/Office 365, SendGrid, Amazon SES, ou qualquer provedor SMTP.
 
+## Integração com Outlook/Teams (Microsoft Graph)
+
+Opcional. Sem configurar isso, o sistema funciona normalmente com uma agenda própria e interna (o padrão). Com a integração ativada, o analista de R.I. conecta sua conta Microsoft e passa a ter:
+
+- Um link único do Microsoft Teams gerado automaticamente para cada agendamento (em vez de um link fixo reutilizado);
+- Checagem de conflito com compromissos reais do Outlook do analista, além da disponibilidade configurada no sistema;
+- Criação automática do evento na agenda do Outlook do analista, sem precisar abrir o anexo `.ics` manualmente.
+
+### 1. Registrar o aplicativo no Azure AD (feito pelo TI/administrador do Microsoft 365)
+
+1. Acesse [portal.azure.com](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations** → **New registration**.
+2. Nome: `Agenda R.I. - More Invest` (ou o que preferir). Tipo de conta: **Single tenant** (só contas da própria organização).
+3. Em **Redirect URI**, escolha plataforma **Web** e cole exatamente:
+   ```
+   https://SEU-DOMINIO-NO-VERCEL/api/integrations/microsoft/callback
+   ```
+   (troque `SEU-DOMINIO-NO-VERCEL` pelo domínio real do site, ex: `api-call-me.vercel.app`).
+4. Depois de criado, vá em **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated permissions**, e adicione:
+   - `Calendars.ReadWrite`
+   - `OnlineMeetings.ReadWrite`
+   - `User.Read` (geralmente já vem por padrão)
+   - `offline_access` (geralmente já vem por padrão)
+
+   Essas são permissões **delegadas** (não "Application permissions") — ou seja, só dão acesso à conta de quem faz login e autoriza, nunca à organização inteira.
+5. Clique em **Grant admin consent for [organização]** (evita que cada usuário precise aprovar individualmente).
+6. Vá em **Certificates & secrets** → **New client secret**, copie o **valor** gerado (só aparece uma vez).
+7. Volte em **Overview** e anote o **Application (client) ID** e o **Directory (tenant) ID**.
+
+### 2. Configurar as variáveis de ambiente
+
+No Vercel (ou no `.env`, se rodando localmente):
+
+```
+ENCRYPTION_KEY="<gere com: openssl rand -base64 32>"
+MICROSOFT_CLIENT_ID="<Application (client) ID>"
+MICROSOFT_CLIENT_SECRET="<valor do client secret>"
+MICROSOFT_TENANT_ID="<Directory (tenant) ID>"
+```
+
+### 3. Conectar a conta
+
+Com as variáveis configuradas (e o site reiniciado/redeployado), acesse **Configurações → Integração Microsoft (Outlook / Teams)** no painel, clique em **Conectar conta Microsoft**, faça login com a conta do analista de R.I. e autorize.
+
+Depois disso, crie ou edite um tipo de reunião e escolha **"Microsoft Teams (automático, requer conta conectada)"** em Local/Videochamada.
+
+### Revogar o acesso
+
+A qualquer momento, o TI pode revogar em **Azure AD → Enterprise Applications → Agenda R.I. → Delete**, ou o próprio analista pode desconectar em **Configurações → Desconectar conta Microsoft** no painel. Isso não afeta nenhuma outra funcionalidade do sistema — ele volta a usar a agenda interna normalmente.
+
 ## Segurança e privacidade
 
 O sistema lida com dados pessoais de investidores (nome, e-mail, telefone), então algumas proteções já vêm implementadas:
@@ -93,6 +142,7 @@ O sistema lida com dados pessoais de investidores (nome, e-mail, telefone), ent�
 - **Limite de agendamentos por IP e por e-mail**: a página pública de agendamento aceita no máximo 8 tentativas de agendamento por IP a cada 15 minutos, e 5 por e-mail de convidado a cada hora — evita que alguém encha a agenda de propósito.
 - **Aviso de LGPD** na página de agendamento, informando ao convidado quais dados são coletados e para qual finalidade.
 - Senhas armazenadas com hash bcrypt (nunca em texto puro); áreas administrativas protegidas por login; links de cancelamento usam identificadores longos e imprevisíveis.
+- Tokens da integração Microsoft (se conectada) são criptografados (AES-256-GCM) antes de ir para o banco, nunca guardados em texto puro.
 
 Pontos que dependem de você, não de código:
 

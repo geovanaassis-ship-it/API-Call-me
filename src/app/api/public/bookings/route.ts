@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { toZonedTime, format as formatTz } from "date-fns-tz";
+import { toZonedTime, fromZonedTime, format as formatTz } from "date-fns-tz";
 import { addMinutes } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { createBookingSchema } from "@/lib/validation";
 import { computeSlotsForDay } from "@/lib/availability";
-import { resolveVideoLink } from "@/lib/video";
+import { resolveVideoLink, generateJitsiRoomUrl } from "@/lib/video";
 import { sendBookingEmails } from "@/lib/email";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getBusyIntervals, createTeamsEvent } from "@/lib/microsoft-graph";
 
 const IP_WINDOW_MS = 15 * 60 * 1000;
 const IP_MAX_BOOKINGS = 8; // tentativas de agendamento por IP a cada 15 minutos
@@ -81,13 +82,23 @@ export async function POST(req: Request) {
       ? dateOverride
       : null;
 
+  let microsoftBusy: { startTime: Date; endTime: Date }[] = [];
+  try {
+    const dayStartUtc = fromZonedTime(`${localDateStr}T00:00:00`, eventType.user.timezone);
+    const dayEndUtc = fromZonedTime(`${localDateStr}T23:59:59`, eventType.user.timezone);
+    const intervals = await getBusyIntervals(eventType.userId, dayStartUtc, dayEndUtc);
+    microsoftBusy = intervals.map((i) => ({ startTime: i.start, endTime: i.end }));
+  } catch (err) {
+    console.error("[bookings] Falha ao consultar agenda do Outlook, ignorando:", err);
+  }
+
   const validSlots = computeSlotsForDay({
     dateStr: localDateStr,
     user: eventType.user,
     eventType,
     weeklyAvailability,
     dateOverride: matchingOverride,
-    existingBookings,
+    existingBookings: [...existingBookings, ...microsoftBusy],
   });
 
   const isValidSlot = validSlots.some((slot) => +slot.start === +requestedStart);
@@ -136,14 +147,44 @@ export async function POST(req: Request) {
     );
   }
 
-  const { videoLink, locationLabel } = resolveVideoLink({
+  let { videoLink, locationLabel } = resolveVideoLink({
     locationType: eventType.locationType,
     locationValue: eventType.locationValue,
     bookingUid: booking.uid,
   });
+  let microsoftEventId: string | null = null;
 
-  if (videoLink) {
-    await prisma.booking.update({ where: { id: booking.id }, data: { videoLink } });
+  if (eventType.locationType === "TEAMS_AUTO") {
+    try {
+      const result = await createTeamsEvent({
+        userId: eventType.userId,
+        subject: `${eventType.title} — ${attendeeName}`,
+        bodyHtml: `<p>Call agendada via Agenda R.I.</p>${notes ? `<p>Observações: ${notes}</p>` : ""}`,
+        startUtc: requestedStart,
+        endUtc: requestedEnd,
+        attendeeEmail,
+        attendeeName,
+      });
+      if (result) {
+        videoLink = result.joinUrl;
+        microsoftEventId = result.eventId;
+      } else {
+        // Conta Microsoft não conectada: usa um link de reserva pra não deixar sem videochamada.
+        videoLink = generateJitsiRoomUrl(booking.uid);
+        locationLabel = "Videochamada (Jitsi Meet — Teams automático ainda não conectado)";
+      }
+    } catch (err) {
+      console.error("[bookings] Falha ao criar evento no Outlook/Teams, usando link de reserva:", err);
+      videoLink = generateJitsiRoomUrl(booking.uid);
+      locationLabel = "Videochamada (Jitsi Meet — falha ao gerar Teams)";
+    }
+  }
+
+  if (videoLink || microsoftEventId) {
+    await prisma.booking.update({
+      where: { id: booking.id },
+      data: { videoLink, microsoftEventId },
+    });
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;

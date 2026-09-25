@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUserId } from "@/lib/session";
 import { sendCancellationEmails } from "@/lib/email";
+import { cancelMicrosoftEvent } from "@/lib/microsoft-graph";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
@@ -25,6 +26,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     where: { id: booking.id },
     data: { status: "CANCELLED", cancellationReason: reason },
   });
+
+  if (booking.microsoftEventId) {
+    cancelMicrosoftEvent(booking.eventType.userId, booking.microsoftEventId, reason ?? undefined).catch((err) =>
+      console.error("[bookings] Falha ao cancelar evento no Outlook:", err),
+    );
+  }
 
   sendCancellationEmails({
     eventTitle: booking.eventType.title,

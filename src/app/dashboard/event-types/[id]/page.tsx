@@ -7,11 +7,14 @@ const LOCATION_LABELS: Record<string, string> = {
   JITSI: "Videochamada (Jitsi, automático)",
   GOOGLE_MEET: "Google Meet (link manual)",
   ZOOM: "Zoom (link manual)",
-  TEAMS: "Microsoft Teams (link manual)",
+  TEAMS: "Microsoft Teams (link fixo manual)",
+  TEAMS_AUTO: "Microsoft Teams (automático, requer conta conectada)",
   PHONE: "Ligação telefônica",
   IN_PERSON: "Presencial",
   CUSTOM: "Personalizado",
 };
+
+const LOCATIONS_WITHOUT_MANUAL_LINK = new Set(["JITSI", "TEAMS_AUTO"]);
 
 interface EventTypeFull {
   id: string;
@@ -142,7 +145,14 @@ export default function EditEventTypePage() {
             ))}
           </select>
         </div>
-        {eventType.locationType !== "JITSI" && (
+        {LOCATIONS_WITHOUT_MANUAL_LINK.has(eventType.locationType) ? (
+          eventType.locationType === "TEAMS_AUTO" && (
+            <p className="text-xs text-slate-400">
+              Um link de reunião do Teams diferente é gerado automaticamente para cada agendamento, via a conta
+              Microsoft conectada em Configurações.
+            </p>
+          )
+        ) : (
           <div>
             <label className="label">
               {eventType.locationType === "IN_PERSON"

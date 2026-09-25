@@ -21,7 +21,7 @@ export const eventTypeSchema = z.object({
   durationMinutes: z.number().int().min(5).max(480),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   active: z.boolean().optional(),
-  locationType: z.enum(["JITSI", "GOOGLE_MEET", "ZOOM", "TEAMS", "PHONE", "IN_PERSON", "CUSTOM"]),
+  locationType: z.enum(["JITSI", "GOOGLE_MEET", "ZOOM", "TEAMS", "TEAMS_AUTO", "PHONE", "IN_PERSON", "CUSTOM"]),
   locationValue: z.string().max(500).optional().nullable(),
 });
 

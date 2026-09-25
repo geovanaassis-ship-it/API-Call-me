@@ -1,6 +1,7 @@
 import { addMinutes, isBefore } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
 import { prisma } from "@/lib/prisma";
+import { getBusyIntervals } from "@/lib/microsoft-graph";
 import type { EventType, User, WeeklyAvailability, DateOverride, Booking } from "@prisma/client";
 
 export interface SlotWindow {
@@ -127,12 +128,24 @@ export async function getAvailableSlots(eventTypeSlug: string, dateStr: string):
     select: { startTime: true, endTime: true },
   });
 
+  // Além dos agendamentos feitos pelo próprio sistema, também respeita
+  // compromissos reais do Outlook, se a conta Microsoft estiver conectada.
+  // Falha na API da Microsoft nunca deve derrubar a página de agendamento:
+  // nesse caso simplesmente ignoramos essa checagem extra.
+  let microsoftBusy: Pick<Booking, "startTime" | "endTime">[] = [];
+  try {
+    const intervals = await getBusyIntervals(eventType.userId, dayStartUtc, dayEndUtc);
+    microsoftBusy = intervals.map((i) => ({ startTime: i.start, endTime: i.end }));
+  } catch (err) {
+    console.error("[availability] Falha ao consultar agenda do Outlook, ignorando:", err);
+  }
+
   return computeSlotsForDay({
     dateStr,
     user: eventType.user,
     eventType,
     weeklyAvailability,
     dateOverride,
-    existingBookings,
+    existingBookings: [...existingBookings, ...microsoftBusy],
   });
 }

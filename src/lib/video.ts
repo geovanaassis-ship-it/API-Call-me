@@ -27,6 +27,9 @@ export function resolveVideoLink(params: {
       return { videoLink: locationValue ?? null, locationLabel: "Zoom" };
     case "TEAMS":
       return { videoLink: locationValue ?? null, locationLabel: "Microsoft Teams" };
+    case "TEAMS_AUTO":
+      // O link real (único por agendamento) é preenchido depois, via Microsoft Graph API.
+      return { videoLink: null, locationLabel: "Microsoft Teams (gerado automaticamente)" };
     case "PHONE":
       return { videoLink: null, locationLabel: locationValue ? `Ligação: ${locationValue}` : "Ligação telefônica" };
     case "IN_PERSON":

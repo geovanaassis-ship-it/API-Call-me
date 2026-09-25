@@ -2,6 +2,24 @@
 
 import { useEffect, useState } from "react";
 
+interface MicrosoftStatus {
+  configured: boolean;
+  connected: boolean;
+  microsoftEmail: string | null;
+  connectedAt: string | null;
+}
+
+const MICROSOFT_CALLBACK_MESSAGES: Record<string, { text: string; tone: "success" | "error" }> = {
+  connected: { text: "Conta Microsoft conectada com sucesso!", tone: "success" },
+  denied: { text: "A autorização foi cancelada ou negada.", tone: "error" },
+  invalid_state: { text: "A sessão de autorização expirou. Tente conectar de novo.", tone: "error" },
+  error: { text: "Não foi possível conectar a conta Microsoft. Tente novamente.", tone: "error" },
+  not_configured: {
+    text: "As credenciais do Microsoft Graph ainda não foram configuradas (peça ao suporte técnico).",
+    tone: "error",
+  },
+};
+
 interface Settings {
   name: string;
   email: string;
@@ -23,11 +41,41 @@ export default function SettingsPage() {
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  const [msStatus, setMsStatus] = useState<MicrosoftStatus | null>(null);
+  const [msDisconnecting, setMsDisconnecting] = useState(false);
+  const [microsoftCallback, setMicrosoftCallback] = useState<string | null>(null);
+
+  function loadMicrosoftStatus() {
+    fetch("/api/integrations/microsoft/status")
+      .then((res) => res.json())
+      .then((data) => setMsStatus(data));
+  }
+
   useEffect(() => {
     fetch("/api/dashboard/settings")
       .then((res) => res.json())
       .then((data) => setSettings(data.user));
+    loadMicrosoftStatus();
+
+    const param = new URLSearchParams(window.location.search).get("microsoft");
+    if (param) {
+      setMicrosoftCallback(param);
+      window.history.replaceState({}, "", "/dashboard/settings");
+    }
   }, []);
+
+  async function handleDisconnectMicrosoft() {
+    if (!confirm("Desconectar a conta Microsoft? Os tipos de reunião com Teams automático vão parar de gerar links até reconectar.")) {
+      return;
+    }
+    setMsDisconnecting(true);
+    try {
+      await fetch("/api/integrations/microsoft/disconnect", { method: "POST" });
+      loadMicrosoftStatus();
+    } finally {
+      setMsDisconnecting(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -221,6 +269,52 @@ export default function SettingsPage() {
           {passwordMessage && <span className="text-sm text-green-600">{passwordMessage}</span>}
         </div>
       </form>
+
+      <h2 className="mb-4 mt-8 text-lg font-semibold">Integração Microsoft (Outlook / Teams)</h2>
+      <div className="card max-w-xl space-y-4 p-5">
+        {microsoftCallback && MICROSOFT_CALLBACK_MESSAGES[microsoftCallback] && (
+          <p
+            className={`text-sm ${
+              MICROSOFT_CALLBACK_MESSAGES[microsoftCallback].tone === "success" ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {MICROSOFT_CALLBACK_MESSAGES[microsoftCallback].text}
+          </p>
+        )}
+
+        {!msStatus && <p className="text-sm text-slate-400">Carregando...</p>}
+
+        {msStatus && !msStatus.configured && (
+          <p className="text-sm text-slate-500">
+            As credenciais do Microsoft Graph (Client ID, Tenant ID, Client Secret) ainda não foram configuradas
+            no servidor. Assim que o TI aprovar o acesso e as credenciais forem adicionadas, essa opção fica
+            disponível aqui.
+          </p>
+        )}
+
+        {msStatus?.configured && !msStatus.connected && (
+          <>
+            <p className="text-sm text-slate-500">
+              Conecte sua conta Microsoft para gerar um link único do Teams por agendamento, checar conflitos
+              reais com sua agenda do Outlook, e criar o evento automaticamente na sua agenda.
+            </p>
+            <a href="/api/integrations/microsoft/connect" className="btn-primary inline-flex">
+              Conectar conta Microsoft
+            </a>
+          </>
+        )}
+
+        {msStatus?.configured && msStatus.connected && (
+          <>
+            <p className="text-sm text-green-600">
+              Conectado{msStatus.microsoftEmail ? ` como ${msStatus.microsoftEmail}` : ""}.
+            </p>
+            <button onClick={handleDisconnectMicrosoft} disabled={msDisconnecting} className="btn-secondary">
+              {msDisconnecting ? "Desconectando..." : "Desconectar conta Microsoft"}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

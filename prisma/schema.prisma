@@ -33,6 +33,7 @@ model User {
   eventTypes    EventType[]
   availability  WeeklyAvailability[]
   dateOverrides DateOverride[]
+  microsoftAccount MicrosoftAccount?
 }
 
 enum LocationType {
@@ -40,9 +41,26 @@ enum LocationType {
   GOOGLE_MEET
   ZOOM
   TEAMS
+  TEAMS_AUTO
   PHONE
   IN_PERSON
   CUSTOM
+}
+
+// Tokens OAuth da conta Microsoft conectada (para Outlook/Teams via Graph API).
+// Um por usuário; access/refresh token guardados criptografados (ver src/lib/crypto.ts).
+model MicrosoftAccount {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  microsoftEmail     String?
+  accessTokenEnc     String   @db.Text
+  refreshTokenEnc    String   @db.Text
+  expiresAt          DateTime
+  scope              String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model EventType {
@@ -111,6 +129,7 @@ model Booking {
   status          BookingStatus @default(CONFIRMED)
   videoLink       String?
   cancellationReason String?
+  microsoftEventId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
