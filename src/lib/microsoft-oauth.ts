@@ -34,7 +34,12 @@ export function buildAuthorizationUrl(state: string): string {
   url.searchParams.set("response_mode", "query");
   url.searchParams.set("scope", GRAPH_SCOPES);
   url.searchParams.set("state", state);
-  url.searchParams.set("prompt", "consent");
+  // "select_account" em vez de "consent": como o TI já concedeu consentimento
+  // de administrador para o app inteiro, forçar uma nova tela de consentimento
+  // ("consent") pode cair na tela de "necessidade de aprovação de administrador"
+  // em organizações que desativam o autoconsentimento de usuário — mesmo o
+  // acesso já estando aprovado. Sem forçar isso, o login segue direto.
+  url.searchParams.set("prompt", "select_account");
 
   return url.toString();
 }
